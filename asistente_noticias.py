@@ -1,47 +1,46 @@
 import streamlit as st
 import requests
 import openai
+import os
 
-# --- Configura tus claves aquí ---
+# ======================
+# CONFIGURACIÓN
+# ======================
+# Puedes dejar esta clave fija o ponerla en Secrets si lo prefieres
 GNEWS_API_KEY = "20209fda6b84290a761aedcbad1e8a6f"
-OPENAI_API_KEY = "aquí_tu_api_key_de_openai"
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Se recomienda usar secrets
 
-# --- Interfaz con Streamlit ---
+# ======================
+# INTERFAZ
+# ======================
 st.set_page_config(page_title="Asistente de Noticias", page_icon="📰")
 st.title("📰 Asistente de Noticias")
+st.write("¿Sobre qué tema quieres ver noticias?")
 
-tema = st.text_input("¿Sobre qué tema quieres ver noticias?", placeholder="Ejemplo: energías renovables")
+tema = st.text_input("Ejemplo: energías renovables")
 buscar = st.button("Buscar noticias")
 
+# ======================
+# LÓGICA
+# ======================
 if buscar and tema:
-    # 1. Buscar noticias en GNews
-    url = f"https://gnews.io/api/v4/search?q={tema}&lang=es&max=10&apikey={GNEWS_API_KEY}"
-    response = requests.get(url)
-    datos = response.json()
+    st.info(f"Buscando noticias sobre: **{tema}**...")
 
-    # 2. Preparar texto para OpenAI
-    noticias = datos.get("articles", [])
-    lista = ""
-    for i, noticia in enumerate(noticias, 1):
-        lista += f"{i}. {noticia['title']}\n{noticia['url']}\n\n"
+    # 🔎 Paso 1: buscar en GNews
+    url = f"https://gnews.io/api/v4/search?q={tema}&lang=es&max=10&token={GNEWS_API_KEY}"
+    r = requests.get(url)
+    noticias = r.json().get("articles", [])
 
-    prompt = f"""El usuario ha solicitado noticias sobre "{tema}". Estas son las noticias reales encontradas:
+    if noticias:
+        st.success("Aquí tienes las últimas noticias:")
+        for i, noticia in enumerate(noticias, start=1):
+            st.markdown(f"**{i}. {noticia['title']}**\n\n🔗 [Ver noticia]({noticia['url']})\n")
 
-{lista}
-
-Organízalas en una lista clara con títulos y enlaces, sin resúmenes ni explicaciones. Formato limpio y listo para mostrar en pantalla o correo.
-"""
-
-    # 3. Llamada a OpenAI
-    openai.api_key = OPENAI_API_KEY
-    respuesta = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "Eres un asistente de noticias. Devuelve solo una lista clara con titulares y enlaces."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-
-    resultado = respuesta["choices"][0]["message"]["content"]
-    st.markdown("### ✅ Resultados:")
-    st.markdown(resultado)
+        # Paso 2: ¿Enviar por correo?
+        enviar = st.checkbox("¿Quieres que te lo envíe por correo?")
+        if enviar:
+            email = st.text_input("Introduce tu email")
+            if email and st.button("Enviar resumen al correo"):
+                st.warning("Funcionalidad pendiente de integración de envío por email ✉️")
+    else:
+        st.error("No se encontraron noticias sobre ese tema.")
